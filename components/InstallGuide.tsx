@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { X, Terminal, Layers, Play, AlertTriangle, CheckCircle2, Download, Cog } from 'lucide-react';
+import { X, Terminal, Layers, Play, CheckCircle2, Download, Cog, FolderInput, Key } from 'lucide-react';
 
 interface InstallGuideProps {
   onClose: () => void;
@@ -14,15 +15,84 @@ const InstallGuide: React.FC<InstallGuideProps> = ({ onClose }) => {
     if (os === 'win') {
         filename = 'install_qa_audit.bat';
         content = `@echo off
+setlocal enabledelayedexpansion
+title QA-Audit.ai Installer
+
 echo ==========================================
 echo   QA-Audit.ai - Automated Installer
 echo ==========================================
 echo.
-echo [1/2] Installing dependencies (this may take a moment)...
+
+:CHECK_DIR
+if exist "package.json" (
+    goto :CONFIG_KEY
+)
+
+color 0E
+echo [WARNING] package.json not found in the current directory.
+echo.
+echo It looks like you ran this script from:
+echo %CD%
+echo.
+echo Please provide the path to your "qa-audit-ai" project folder.
+echo (You can drag and drop the folder here and press Enter)
+echo.
+set /p target_dir="Project Path > "
+
+REM Clean up quotes from drag-and-drop
+set target_dir=!target_dir:"=!
+
+if "!target_dir!"=="" goto :CHECK_DIR
+
+cd /d "!target_dir!"
+if errorlevel 1 (
+    color 0C
+    echo.
+    echo [ERROR] Directory not found. Please try again.
+    echo.
+    goto :CHECK_DIR
+)
+
+goto :CHECK_DIR
+
+:CONFIG_KEY
+color 07
+echo.
+echo [OK] Found project in: %CD%
+echo.
+
+if exist ".env" (
+    echo [INFO] .env file found. Using existing configuration.
+    goto :INSTALL
+)
+
+echo ==========================================
+echo   API KEY CONFIGURATION
+echo ==========================================
+echo.
+echo To use QA-Audit.ai, you need a free Google Gemini API Key.
+echo Get it here: https://aistudio.google.com/app/apikey
+echo.
+echo Please paste your API Key below and press Enter.
+echo.
+set /p api_key="API Key > "
+
+if "!api_key!"=="" (
+    echo [WARNING] No key entered. You will need to create a .env file manually.
+) else (
+    echo API_KEY=!api_key! > .env
+    echo [OK] API Key saved to .env
+)
+
+:INSTALL
+echo.
+echo [1/2] Installing dependencies...
 call npm install
 if %errorlevel% neq 0 (
+    color 0C
     echo.
-    echo [ERROR] npm install failed. Do you have Node.js installed?
+    echo [ERROR] npm install failed.
+    echo Please ensure Node.js is installed: https://nodejs.org/
     pause
     exit /b %errorlevel%
 )
@@ -31,12 +101,14 @@ echo.
 echo [2/2] Building Extension...
 call npm run build
 if %errorlevel% neq 0 (
+    color 0C
     echo.
     echo [ERROR] Build failed.
     pause
     exit /b %errorlevel%
 )
 
+color 0A
 echo.
 echo ==========================================
 echo        SETUP COMPLETE! SUCCESS!
@@ -44,11 +116,11 @@ echo ==========================================
 echo.
 echo HOW TO INSTALL IN CHROME:
 echo 1. Open Chrome and go to: chrome://extensions
-echo 2. Toggle "Developer mode" (top right corner)
-echo 3. Click "Load unpacked" (top left)
-echo 4. Select the "dist" folder inside this project directory
+echo 2. Enable "Developer mode" (top right)
+echo 3. Click "Load unpacked"
+echo 4. Select the "dist" folder located here:
+echo    %CD%\\dist
 echo.
-echo You can now close this window.
 pause`;
     } else {
         filename = 'install_qa_audit.sh';
@@ -57,10 +129,70 @@ echo "=========================================="
 echo "  QA-Audit.ai - Automated Installer"
 echo "=========================================="
 echo ""
+
+# Function to check dir
+check_dir() {
+    if [ -f "package.json" ]; then
+        return 0
+    fi
+    return 1
+}
+
+# Loop until valid dir found
+while ! check_dir; do
+    echo "[WARNING] package.json not found in $(pwd)"
+    echo "Please drag and drop your project folder here and press Enter:"
+    read -r target_dir
+    
+    # Remove quotes
+    target_dir="\${target_dir%\\"}"
+    target_dir="\${target_dir#\\"}"
+    target_dir="\${target_dir%'}"
+    target_dir="\${target_dir#'}"
+    
+    # Handle empty input
+    if [ -z "$target_dir" ]; then
+        continue
+    fi
+
+    # Try to cd
+    if [ -d "$target_dir" ]; then
+        cd "$target_dir" || continue
+    else
+        echo "[ERROR] Directory does not exist."
+    fi
+done
+
+echo ""
+echo "[OK] Found project in: $(pwd)"
+
+# API Key Configuration
+if [ ! -f ".env" ]; then
+    echo ""
+    echo "=========================================="
+    echo "  API KEY CONFIGURATION"
+    echo "=========================================="
+    echo "To use QA-Audit.ai, you need a free Google Gemini API Key."
+    echo "Get it here: https://aistudio.google.com/app/apikey"
+    echo ""
+    echo "Please paste your API Key below and press Enter:"
+    read -r api_key
+    
+    if [ ! -z "$api_key" ]; then
+        echo "API_KEY=$api_key" > .env
+        echo "[OK] API Key saved to .env"
+    else
+        echo "[WARNING] No key entered. You will need to create a .env file manually."
+    fi
+else
+    echo "[INFO] .env file found. Using existing configuration."
+fi
+
+echo ""
 echo "[1/2] Installing dependencies..."
 npm install
 if [ $? -ne 0 ]; then
-    echo "[ERROR] npm install failed. Ensure Node.js is installed."
+    echo "[ERROR] npm install failed. Is Node.js installed?"
     exit 1
 fi
 
@@ -77,12 +209,9 @@ echo "=========================================="
 echo "       SETUP COMPLETE! SUCCESS!"
 echo "=========================================="
 echo ""
-echo "HOW TO INSTALL IN CHROME:"
-echo "1. Open Chrome and go to: chrome://extensions"
-echo "2. Toggle 'Developer mode' (top right corner)"
-echo "3. Click 'Load unpacked' (top left)"
-echo "4. Select the 'dist' folder inside this project directory"
-echo ""`;
+echo "LOCATION: $(pwd)/dist"
+echo ""
+`;
     }
 
     const blob = new Blob([content], { type: 'text/plain' });
@@ -113,11 +242,20 @@ echo ""`;
             {/* Prerequisites */}
              <section>
                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3">0. Prerequisites</h3>
-                <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 flex items-start space-x-3">
-                    <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
-                    <div>
-                        <p className="text-sm text-slate-300">Node.js Installed</p>
-                        <p className="text-xs text-slate-500">You only need Node.js installed on your computer. The tool will handle the rest.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 flex items-start space-x-3">
+                        <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-sm text-slate-300">Node.js Installed</p>
+                            <p className="text-xs text-slate-500">Required to run the installer.</p>
+                        </div>
+                    </div>
+                     <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 flex items-start space-x-3">
+                        <Key className="w-5 h-5 text-yellow-500 shrink-0 mt-0.5" />
+                        <div>
+                            <p className="text-sm text-slate-300">Gemini API Key</p>
+                            <p className="text-xs text-slate-500">Get it free from <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-indigo-400 hover:underline">Google AI Studio</a>.</p>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -134,7 +272,25 @@ echo ""`;
                         </div>
                         <div>
                             <h3 className="text-lg font-bold text-white">One-Click Automated Setup</h3>
-                            <p className="text-sm text-indigo-200">Skip the manual commands. Download and run the installer script.</p>
+                            <p className="text-sm text-indigo-200">Handles dependencies, API key setup, and building.</p>
+                        </div>
+                    </div>
+
+                    {/* Smart Script Note */}
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4 space-y-2">
+                        <div className="flex items-start space-x-3">
+                             <FolderInput className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                             <div className="text-xs text-blue-200">
+                                <strong className="block text-blue-400 mb-1">Smart Installer:</strong>
+                                Can be run from anywhere. If run from Downloads, it will ask you to find the project folder.
+                            </div>
+                        </div>
+                         <div className="flex items-start space-x-3 pt-2 border-t border-blue-500/20">
+                             <Key className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                             <div className="text-xs text-blue-200">
+                                <strong className="block text-blue-400 mb-1">API Key Setup:</strong>
+                                The script will ask for your Gemini API Key and configure it automatically.
+                            </div>
                         </div>
                     </div>
                     
@@ -160,9 +316,6 @@ echo ""`;
                             </div>
                         </button>
                     </div>
-                    <p className="text-xs text-slate-500 mt-3 italic">
-                        * Place the downloaded file in your project folder and double-click (or run in terminal) to start.
-                    </p>
                 </div>
             </section>
 
@@ -190,14 +343,6 @@ echo ""`;
                         <li>Click the <b>Load unpacked</b> button (top-left).</li>
                         <li>Select the <code className="bg-slate-950 px-1.5 py-0.5 rounded text-yellow-300">dist</code> folder created by the installer.</li>
                     </ol>
-                </div>
-                
-                <div className="mt-4 flex items-start space-x-3 bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-lg">
-                    <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" />
-                    <div className="text-xs text-yellow-200/80">
-                        <strong className="block text-yellow-500 mb-1">Important:</strong>
-                        Ensure <code className="text-white">manifest.json</code> exists inside your build folder. The installer handles this automatically.
-                    </div>
                 </div>
             </section>
 
