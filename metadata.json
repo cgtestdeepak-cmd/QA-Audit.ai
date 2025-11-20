@@ -1,0 +1,5 @@
+{
+  "name": "QA-Audit.ai",
+  "description": "An intelligent QA and Accessibility auditing tool that analyzes HTML snippets to generate comprehensive test scenarios, risk assessments, and compliance reports using Gemini 2.5.",
+  "requestFramePermissions": []
+}
